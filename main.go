@@ -25,6 +25,7 @@ type config struct {
 }
 
 type profile struct {
+	Description      string            `json:"desc,omitempty"`
 	Command          string            `json:"command"`
 	Args             []string          `json:"args,omitempty"`
 	Env              map[string]string `json:"env,omitempty"`
@@ -58,7 +59,25 @@ func entrypoint(args []string, stdout, stderr io.Writer, replace processReplacer
 	}
 	if len(args) == 0 {
 		printUsage(stderr)
-		return errors.New("a profile name is required")
+		return errors.New("a command is required")
+	}
+
+	command := args[0]
+	switch command {
+	case "list":
+		if len(args) != 1 {
+			printUsage(stderr)
+			return errors.New("list takes no arguments")
+		}
+	case "run":
+		args = args[1:]
+		if len(args) == 0 {
+			printUsage(stderr)
+			return errors.New("a profile name is required")
+		}
+	default:
+		printUsage(stderr)
+		return fmt.Errorf("unknown command %q", command)
 	}
 
 	home, err := os.UserHomeDir()
@@ -72,6 +91,13 @@ func entrypoint(args []string, stdout, stderr io.Writer, replace processReplacer
 		return err
 	}
 
+	if command == "list" {
+		for _, name := range profileNames(cfg.Profiles) {
+			fmt.Fprintf(stdout, "%s\t%s\n", name, cfg.Profiles[name].Description)
+		}
+		return nil
+	}
+
 	selected, ok := cfg.Profiles[args[0]]
 	if !ok {
 		return unknownProfileError(args[0], cfg.Profiles)
@@ -81,9 +107,10 @@ func entrypoint(args []string, stdout, stderr io.Writer, replace processReplacer
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: caph <profile> [additional arguments...]")
-	fmt.Fprintln(w, "       caph --allow-any-command <profile> [additional arguments...]")
+	fmt.Fprintln(w, "Usage: caph run <profile> [additional arguments...]")
+	fmt.Fprintln(w, "       caph --allow-any-command run <profile> [additional arguments...]")
 	fmt.Fprintln(w, "       caph --help")
+	fmt.Fprintln(w, "       caph list")
 	fmt.Fprintln(w, "       caph version")
 }
 
@@ -236,12 +263,17 @@ func mergeEnvironment(base []string, overrides map[string]string) []string {
 	return result
 }
 
-func unknownProfileError(name string, profiles map[string]profile) error {
+func profileNames(profiles map[string]profile) []string {
 	names := make([]string, 0, len(profiles))
-	for candidate := range profiles {
-		names = append(names, candidate)
+	for name := range profiles {
+		names = append(names, name)
 	}
 	sort.Strings(names)
+	return names
+}
+
+func unknownProfileError(name string, profiles map[string]profile) error {
+	names := profileNames(profiles)
 	if len(names) == 0 {
 		return fmt.Errorf("profile %q not found (no profiles are configured)", name)
 	}

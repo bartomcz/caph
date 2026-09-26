@@ -24,10 +24,61 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
+func TestRunCommand(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.Mkdir(filepath.Join(home, ".caph"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".caph", configFileName), []byte(`{"profiles":{"foo":{"command":"go"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var gotArgv []string
+	sentinel := errors.New("replacement returned")
+	err := entrypoint([]string{allowAnyCommandFlag, "run", "foo", "additional"}, &bytes.Buffer{}, &bytes.Buffer{}, func(_ string, argv, _ []string) error {
+		gotArgv = argv
+		return sentinel
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("entrypoint() error = %v, want wrapped sentinel", err)
+	}
+	if want := []string{"go", "additional"}; !reflect.DeepEqual(gotArgv, want) {
+		t.Fatalf("argv = %#v, want %#v", gotArgv, want)
+	}
+}
+
+func TestProfileRequiresRunCommand(t *testing.T) {
+	err := entrypoint([]string{"foo"}, &bytes.Buffer{}, &bytes.Buffer{}, nil)
+	if err == nil || !strings.Contains(err.Error(), `unknown command "foo"`) {
+		t.Fatalf("entrypoint() error = %v, want unknown command error", err)
+	}
+}
+
+func TestListCommand(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.Mkdir(filepath.Join(home, ".caph"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".caph", configFileName), []byte(`{"profiles":{"zeta":{"command":"pi","desc":"Use for reviews"},"alpha":{"command":"codex","desc":"Use for implementation"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	if err := entrypoint([]string{"list"}, &stdout, &bytes.Buffer{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := stdout.String(), "alpha\tUse for implementation\nzeta\tUse for reviews\n"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
+
 func TestLoadConfig(t *testing.T) {
 	path := writeTestConfig(t, `{
 		"profiles": {
 			"foo": {
+				"desc": "Use for autonomous implementation tasks",
 				"command": "codex",
 				"args": ["--model", "o3"],
 				"env": {"CODEX_HOME": "/tmp/codex"},
@@ -41,7 +92,7 @@ func TestLoadConfig(t *testing.T) {
 		t.Fatalf("loadConfig() error = %v", err)
 	}
 	got := cfg.Profiles["foo"]
-	if got.Command != "codex" || !reflect.DeepEqual(got.Args, []string{"--model", "o3"}) {
+	if got.Description != "Use for autonomous implementation tasks" || got.Command != "codex" || !reflect.DeepEqual(got.Args, []string{"--model", "o3"}) {
 		t.Fatalf("loaded profile = %#v", got)
 	}
 	if got.Env["CODEX_HOME"] != "/tmp/codex" || got.WorkingDirectory != "/tmp" {

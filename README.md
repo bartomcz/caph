@@ -29,11 +29,12 @@ Create `~/.caph/profiles.json`:
 ```json
 {
   "profiles": {
-    "foo": {
+    "coding": {
+      "desc": "Use for autonomous implementation tasks",
       "command": "codex",
       "args": ["--model", "o3", "--full-auto"]
     },
-    "claude-work": {
+    "cr": {
       "command": "claude",
       "args": ["--model", "sonnet"],
       "working_directory": "~/projects/work",
@@ -47,6 +48,7 @@ Create `~/.caph/profiles.json`:
 
 Each profile supports:
 
+- `desc`: free-text description of when to use the profile
 - `command` (required): executable name or path. Its basename must be one of
   `aider`, `amp`, `claude`, `codex`, `gemini`, `goose`, `opencode`, or `pi`.
 - `args`: arguments placed before command-line arguments
@@ -58,19 +60,22 @@ Unknown configuration fields are rejected to catch mistakes.
 ## Use
 
 ```sh
-caph foo
-caph foo --additional-harness-argument
+caph list
+caph run foo
+caph run foo --additional-harness-argument
 caph version
 ```
+
+`caph list` prints each profile name and description, separated by a tab and sorted by name.
 
 To run a profile whose command is not on the supported list, explicitly bypass
 the check for that invocation:
 
 ```sh
-caph --allow-any-command foo
+caph --allow-any-command run foo
 ```
 
-Arguments after the profile name are appended after those from the profile.
+Arguments after the profile name in `caph run` are appended after those from the profile.
 `caph` resolves the command using `PATH`, changes to the configured working directory if any,
 and then uses the operating system's process-replacement operation (`exec`).
 Consequently the harness directly owns the existing terminal and receives its
