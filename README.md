@@ -1,5 +1,11 @@
 # caph
 
+```text
+ ▄▄▄▄  ▄▄▄  ▄▄▄▄  ▄▄ ▄▄
+██▀▀▀ ██▀██ ██▄█▀ ██▄██
+▀████ ██▀██ ██    ██ ██
+```
+
 `caph` starts a coding harness from a named profile. On Unix systems it replaces
 itself with the harness process, so it does not proxy, pipe, or stream terminal
 I/O.
@@ -7,13 +13,13 @@ I/O.
 ## Install
 
 ```sh
-go install .
+go install -ldflags "-X main.version=0.1.0 -X main.builtAt=$(date -u +%Y%m%d%H%M%S)" .
 ```
 
 Alternatively, build a local binary:
 
 ```sh
-go build -o caph .
+go build -ldflags "-X main.version=0.1.0 -X main.builtAt=$(date -u +%Y%m%d%H%M%S)" -o caph .
 ```
 
 ## Configure
@@ -54,6 +60,7 @@ Unknown configuration fields are rejected to catch mistakes.
 ```sh
 caph foo
 caph foo --additional-harness-argument
+caph version
 ```
 
 To run a profile whose command is not on the supported list, explicitly bypass

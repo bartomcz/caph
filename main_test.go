@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -8,6 +9,20 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestVersionCommand(t *testing.T) {
+	var stdout bytes.Buffer
+	previousVersion, previousBuiltAt := version, builtAt
+	version, builtAt = "1.2.3", "20250926123456"
+	defer func() { version, builtAt = previousVersion, previousBuiltAt }()
+
+	if err := entrypoint([]string{"version"}, &stdout, &bytes.Buffer{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := stdout.String(), "caph 1.2.3 (built 20250926123456)\n"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
 
 func TestLoadConfig(t *testing.T) {
 	path := writeTestConfig(t, `{
@@ -74,7 +89,7 @@ func TestLaunchBuildsArgumentsAndEnvironment(t *testing.T) {
 		Command: os.Args[0],
 		Args:    []string{"configured"},
 		Env:     map[string]string{"CAPH_TEST_VALUE": "set"},
-	}, []string{"additional"}, true, replacer)
+	}, []string{"additional"}, true, &bytes.Buffer{}, replacer)
 	if err == nil || !errors.Is(err, sentinel) {
 		t.Fatalf("launch() error = %v, want wrapped sentinel", err)
 	}
@@ -89,7 +104,7 @@ func TestLaunchBuildsArgumentsAndEnvironment(t *testing.T) {
 
 func TestLaunchRejectsUnsupportedCommand(t *testing.T) {
 	called := false
-	err := launch(profile{Command: "/bin/sh"}, nil, false, func(_ string, _, _ []string) error {
+	err := launch(profile{Command: "/bin/sh"}, nil, false, &bytes.Buffer{}, func(_ string, _, _ []string) error {
 		called = true
 		return nil
 	})

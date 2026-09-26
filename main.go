@@ -17,6 +17,9 @@ const (
 	allowAnyCommandFlag = "--allow-any-command"
 )
 
+var version = "dev"
+var builtAt = "unknown"
+
 type config struct {
 	Profiles map[string]profile `json:"profiles"`
 }
@@ -31,13 +34,18 @@ type profile struct {
 type processReplacer func(path string, argv, env []string) error
 
 func main() {
-	if err := entrypoint(os.Args[1:], os.Stderr, replaceProcess); err != nil {
+	if err := entrypoint(os.Args[1:], os.Stdout, os.Stderr, replaceProcess); err != nil {
 		fmt.Fprintf(os.Stderr, "caph: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func entrypoint(args []string, stderr io.Writer, replace processReplacer) error {
+func entrypoint(args []string, stdout, stderr io.Writer, replace processReplacer) error {
+	if len(args) == 1 && args[0] == "version" {
+		fmt.Fprintf(stdout, "caph %s (built %s)\n", version, builtAt)
+		return nil
+	}
+
 	allowAnyCommand := false
 	if len(args) > 0 && args[0] == allowAnyCommandFlag {
 		allowAnyCommand = true
@@ -69,13 +77,18 @@ func entrypoint(args []string, stderr io.Writer, replace processReplacer) error 
 		return unknownProfileError(args[0], cfg.Profiles)
 	}
 
-	return launch(selected, args[1:], allowAnyCommand, replace)
+	return launch(selected, args[1:], allowAnyCommand, stderr, replace)
 }
 
 func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: caph <profile> [additional arguments...]")
 	fmt.Fprintln(w, "       caph --allow-any-command <profile> [additional arguments...]")
 	fmt.Fprintln(w, "       caph --help")
+	fmt.Fprintln(w, "       caph version")
+}
+
+func printBanner(w io.Writer, harness string) {
+	fmt.Fprintf(w, "\x1b[36m ▄▄▄▄  ▄▄▄  ▄▄▄▄  ▄▄ ▄▄\n██▀▀▀ ██▀██ ██▄█▀ ██▄██\n▀████ ██▀██ ██    ██ ██\nPassing to %s...\x1b[0m\n", harness)
 }
 
 func loadConfig(path string) (config, error) {
@@ -141,7 +154,7 @@ func validateProfile(name string, p profile) error {
 	return nil
 }
 
-func launch(p profile, additionalArgs []string, allowAnyCommand bool, replace processReplacer) error {
+func launch(p profile, additionalArgs []string, allowAnyCommand bool, stderr io.Writer, replace processReplacer) error {
 	if !allowAnyCommand && !isSupportedCommand(p.Command) {
 		return fmt.Errorf("command %q is not supported; use %s to execute it explicitly", p.Command, allowAnyCommandFlag)
 	}
@@ -165,6 +178,8 @@ func launch(p profile, additionalArgs []string, allowAnyCommand bool, replace pr
 	argv = append(argv, p.Command)
 	argv = append(argv, p.Args...)
 	argv = append(argv, additionalArgs...)
+
+	printBanner(stderr, filepath.Base(p.Command))
 
 	if err := replace(path, argv, mergeEnvironment(os.Environ(), p.Env)); err != nil {
 		return fmt.Errorf("start command %q: %w", p.Command, err)
